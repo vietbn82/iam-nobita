@@ -1,0 +1,7 @@
+# Track only source; v1 binaries + publish output stay local.
+/*
+!/src/
+!/.gitignore
+!/README.md
+bin/
+obj/
