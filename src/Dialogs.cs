@@ -306,6 +306,73 @@ sealed class SettingsForm : DialogBase
     }
 }
 
+sealed class HistoryForm : DialogBase
+{
+    readonly History history;
+    readonly DateTimePicker from = new() { Format = DateTimePickerFormat.Short, Width = 110 };
+    readonly DateTimePicker to = new() { Format = DateTimePickerFormat.Short, Width = 110 };
+    readonly Label summary = new() { AutoSize = true, ForeColor = SystemColors.GrayText };
+    readonly DataGridView list = new()
+    {
+        Size = new Size(480, 360),
+        ReadOnly = true,
+        AllowUserToAddRows = false,
+        AllowUserToDeleteRows = false,
+        AllowUserToResizeRows = false,
+        RowHeadersVisible = false,
+        SelectionMode = DataGridViewSelectionMode.FullRowSelect,
+        AutoSizeColumnsMode = DataGridViewAutoSizeColumnsMode.Fill,
+        BackgroundColor = SystemColors.Window,
+    };
+
+    public HistoryForm(History history) : base("Lịch sử đổi mode — I'm Nobita")
+    {
+        this.history = history;
+        to.Value = DateTime.Today;
+        from.Value = DateTime.Today.AddDays(-30);
+        var show = new Button { Text = "Xem", AutoSize = true };
+        show.Click += (_, _) => Reload();
+
+        var filter = new FlowLayoutPanel { AutoSize = true, WrapContents = false, Margin = Padding.Empty };
+        foreach (var c in new Control[] { new Label { Text = "Từ" }, from, new Label { Text = "Đến" }, to, show })
+        {
+            if (c is Label l) { l.AutoSize = true; l.Margin = new Padding(3, 7, 3, 3); }
+            filter.Controls.Add(c);
+        }
+
+        list.Columns.Add("at", "Thời gian");
+        list.Columns.Add("mode", "Chuyển sang");
+        list.Columns.Add("source", "Nguồn");
+
+        var close = new Button { Text = "Đóng", AutoSize = true, DialogResult = DialogResult.Cancel, Anchor = AnchorStyles.Right };
+        CancelButton = close;
+        AddFull(Grid, filter);
+        AddFull(Grid, list);
+        AddFull(Grid, summary);
+        AddFull(Grid, Error);
+        AddFull(Grid, close);
+        Reload();
+    }
+
+    void Reload()
+    {
+        list.Rows.Clear();
+        try
+        {
+            var entries = history.Query(from.Value.Date, to.Value.Date.AddDays(1)); // both days inclusive
+            foreach (var e in entries)
+                list.Rows.Add(e.At.ToString("dd/MM/yyyy HH:mm:ss"), e.Nobita ? "Nobita Mode" : "Cống hiến Mode", e.Source);
+            summary.Text = $"{entries.Count} lần đổi";
+            Error.Text = "";
+        }
+        catch (Exception e)
+        {
+            summary.Text = "";
+            Error.Text = $"Không đọc được lịch sử: {e.Message}";
+        }
+    }
+}
+
 sealed class CustomTimerForm : DialogBase
 {
     readonly NumericUpDown hours, minutes;

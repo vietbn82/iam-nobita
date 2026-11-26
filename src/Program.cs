@@ -50,7 +50,7 @@ sealed class TrayApp : ApplicationContext
     public TrayApp()
     {
         var menu = new ContextMenuStrip();
-        modeItem = new ToolStripMenuItem("", null, (_, _) => Toggle()) { Font = new Font(menu.Font, FontStyle.Bold) };
+        modeItem = new ToolStripMenuItem("", null, (_, _) => Toggle("Menu")) { Font = new Font(menu.Font, FontStyle.Bold) };
 
         timerMenu = new ToolStripMenuItem("Hẹn giờ đổi mode");
         foreach (var (text, span) in Presets)
@@ -66,6 +66,7 @@ sealed class TrayApp : ApplicationContext
             timerMenu,
             startupItem,
             new ToolStripMenuItem("Cài đặt…", null, (_, _) => OpenSettings()),
+            new ToolStripMenuItem("Lịch sử đổi mode…", null, (_, _) => OpenHistory()),
             new ToolStripMenuItem("Kiểm tra cập nhật", null, (_, _) => _ = CheckUpdate(manual: true)),
             new ToolStripSeparator(),
             new ToolStripMenuItem("Nghỉ khỏe!", null, (_, _) => ExitThread()),
@@ -73,7 +74,7 @@ sealed class TrayApp : ApplicationContext
         menu.Opening += (_, _) => startupItem.Checked = Settings.StartWithWindows;
 
         tray = new NotifyIcon { ContextMenuStrip = menu, Visible = true };
-        tray.MouseDoubleClick += (_, e) => { if (e.Button == MouseButtons.Left) Toggle(); };
+        tray.MouseDoubleClick += (_, e) => { if (e.Button == MouseButtons.Left) Toggle("Double-click"); };
 
         hotkey = new HotkeyWindow(OnHotkey);
         if (!hotkey.Register(settings.HotkeyModifiers, settings.HotkeyKey))
@@ -84,12 +85,21 @@ sealed class TrayApp : ApplicationContext
         Refresh();
     }
 
-    void Toggle(string? reason = null)
+    /// <param name="source">Logged to history.</param>
+    /// <param name="inToast">Automatic switches (timer, schedule) also name their source in the toast.</param>
+    void Toggle(string source, bool inToast = false)
     {
         nobita = !nobita;
         Native.KeepAwake(nobita);
+        Log(source);
         Refresh();
-        Toast.Show(ModeIcon, reason == null ? ModeText : $"{reason}: {ModeText}", settings);
+        Toast.Show(ModeIcon, inToast ? $"{source}: {ModeText}" : ModeText, settings);
+    }
+
+    void Log(string source)
+    {
+        try { History.Default.Add(DateTime.Now, nobita, source); }
+        catch { } // ponytail: history is best-effort; a locked/corrupt DB must never break mode switching
     }
 
     void OnHotkey()
@@ -103,7 +113,7 @@ sealed class TrayApp : ApplicationContext
             dialogOpen = false;
             if (answer != DialogResult.Yes) return;
         }
-        Toggle();
+        Toggle("Hotkey");
     }
 
     void OnTick()
@@ -112,12 +122,12 @@ sealed class TrayApp : ApplicationContext
         var rule = Schedule.Due(settings.Schedules, lastTick, now);
         lastTick = now;
         if (rule != null && rule.Nobita != nobita)
-            Toggle(rule.Name.Length > 0 ? $"Lịch \"{rule.Name}\"" : "Lịch");
+            Toggle(rule.Name.Length > 0 ? $"Lịch \"{rule.Name}\"" : "Lịch", inToast: true);
 
         if (switchAt is long due && Environment.TickCount64 >= due)
         {
             switchAt = null;
-            Toggle("Hẹn giờ");
+            Toggle("Hẹn giờ", inToast: true);
         }
 
         if (nobita && Native.IdleTime() >= TimeSpan.FromSeconds(settings.IdleSeconds))
@@ -210,6 +220,14 @@ sealed class TrayApp : ApplicationContext
         Refresh();
     }
 
+    void OpenHistory()
+    {
+        if (dialogOpen) return;
+        dialogOpen = true;
+        using (var form = new HistoryForm(History.Default)) form.ShowDialog();
+        dialogOpen = false;
+    }
+
     void Refresh()
     {
         modeItem.Text = ModeText;
@@ -237,6 +255,7 @@ sealed class TrayApp : ApplicationContext
     {
         tick.Dispose();
         hotkey.Dispose();
+        if (nobita) { nobita = false; Log("Thoát app"); } // exiting ends Nobita Mode
         Native.KeepAwake(false);
         tray.Visible = false;
         tray.Dispose();

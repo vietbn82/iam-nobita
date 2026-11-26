@@ -9,7 +9,7 @@
     <ApplicationHighDpiMode>PerMonitorV2</ApplicationHighDpiMode>
     <ApplicationIcon>Assets\nobita_nobi.ico</ApplicationIcon>
     <Product>I'm Nobita</Product>
-    <Version>2.1.0</Version>
+    <Version>2.2.0</Version>
 
     <!-- Stand-alone: one exe, runtime bundled, nothing to install. -->
     <RuntimeIdentifier>win-x64</RuntimeIdentifier>
@@ -23,6 +23,10 @@
 
   <ItemGroup>
     <EmbeddedResource Include="Assets\*.ico" LogicalName="%(Filename)%(Extension)" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <PackageReference Include="Microsoft.Data.Sqlite" Version="10.0.15" />
   </ItemGroup>
 
 </Project>

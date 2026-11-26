@@ -29,6 +29,7 @@ https://github.com/vietbn82/iam-nobita/releases/latest/download/IAmNobita.exe
 | Toggle mode | `Ctrl+F12` (configurable) or double-click the tray icon |
 | Switch once, later | Tray → `Hẹn giờ đổi mode` (Mode timer): 15m / 30m / 1h / 2h / 4h / custom |
 | Weekly schedule | Tray → `Cài đặt…` (Settings) → `Lịch` (Schedule): time + target mode + weekdays, any number of rows |
+| History | Tray → `Lịch sử đổi mode…` (Mode history): every switch with time, new mode and source (hotkey / menu / timer / schedule / exit). Shows the last 30 days by default, any date range on demand. Stored in SQLite at `%APPDATA%\IAmNobita\history.db` |
 | Start with Windows | Tray → `Khởi động cùng Windows` (Start with Windows) |
 | Settings | Tray → `Cài đặt…` (Settings), saved to `%APPDATA%\IAmNobita\settings.json` |
 | Update | Checks GitHub Releases daily, or Tray → `Kiểm tra cập nhật` (Check for updates) |
@@ -59,5 +60,5 @@ Output: `publish/IAmNobita.exe`, a single self-contained file that runs on any W
 Self-update looks for an `IAmNobita.exe` asset on the latest GitHub release. The tag (`vX.Y.Z`) must match `<Version>` in `src/IAmNobita.csproj`:
 
 ```sh
-gh release create v2.1.0 publish/IAmNobita.exe
+gh release create v2.2.0 publish/IAmNobita.exe
 ```
