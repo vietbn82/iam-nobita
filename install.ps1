@@ -44,4 +44,4 @@ if (-not $NoShortcut) {
 }
 
 if (-not $NoLaunch) { Start-Process $exe }
-Write-Host "Done. Start Menu: I'm Nobita. Tray menu -> 'Khoi dong cung Windows' to auto-start."
+Write-Host "Done. Start Menu: I'm Nobita. To auto-start: tray menu -> 'Khoi dong cung Windows' (Start with Windows)."
