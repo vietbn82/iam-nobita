@@ -5,5 +5,7 @@
 !/README.md
 !/tests/
 !/install.ps1
+!/LICENSE
+!/winget/
 bin/
 obj/

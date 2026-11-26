@@ -21,6 +21,9 @@ public class HistoryTests
             Assert.Equal(
                 [new History.Entry(new DateTime(2026, 11, 10, 17, 0, 0), true, "Hẹn giờ"), new History.Entry(new DateTime(2026, 11, 10, 8, 30, 5), false, "Lịch \"Sáng\"")],
                 got);
+
+            h.Purge(new DateTime(2026, 11, 10, 12, 0, 0));
+            Assert.Equal(2, h.Query(DateTime.MinValue, DateTime.MaxValue).Count); // 10/11 17:00 + 20/11 kept
         }
         finally
         {

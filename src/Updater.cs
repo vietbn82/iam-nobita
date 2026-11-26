@@ -56,7 +56,7 @@ static class Updater
             if (!hash.Equals(release.Sha256, StringComparison.OrdinalIgnoreCase))
             {
                 File.Delete(newPath);
-                throw new InvalidDataException("File tải về sai checksum — đã hủy cập nhật.");
+                throw new InvalidDataException(L.T("File tải về sai checksum — đã hủy cập nhật.", "Downloaded file failed the checksum — update cancelled."));
             }
         }
 

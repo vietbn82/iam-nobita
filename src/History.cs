@@ -24,6 +24,15 @@ sealed class History(string path)
         cmd.ExecuteNonQuery();
     }
 
+    public void Purge(DateTime before)
+    {
+        using var db = Open();
+        using var cmd = db.CreateCommand();
+        cmd.CommandText = "DELETE FROM log WHERE at < $before";
+        cmd.Parameters.AddWithValue("$before", before.ToString(TimeFormat, CultureInfo.InvariantCulture));
+        cmd.ExecuteNonQuery();
+    }
+
     /// <summary>Entries with from &lt;= At &lt; toExclusive, newest first.</summary>
     public List<Entry> Query(DateTime from, DateTime toExclusive)
     {

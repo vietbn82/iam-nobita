@@ -63,6 +63,15 @@ public class ScheduleTests
     }
 
     [Fact]
+    public void SkipDateDoesNotFire()
+    {
+        var rule = Rule("08:30", true);
+        DateOnly[] skip = [DateOnly.FromDateTime(Monday)];
+        Assert.Null(Schedule.Due([rule], At(Monday, "08:29:59"), At(Monday, "08:30:00"), skip));
+        Assert.Same(rule, Schedule.Due([rule], At(Monday.AddDays(1), "08:29:59"), At(Monday.AddDays(1), "08:30:00"), skip));
+    }
+
+    [Fact]
     public void DisabledRuleDoesNotFire()
     {
         Assert.Null(Schedule.Due([Rule("08:30", true, enabled: false)], At(Monday, "08:29:59"), At(Monday, "08:30:00")));

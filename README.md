@@ -4,10 +4,10 @@ Windows tray app that keeps your PC "active" while you're away.
 
 | Mode | Behaviour |
 |---|---|
-| **Cống hiến Mode** ("Dedicated" — default) | Normal. App does nothing. |
-| **Nobita Mode** ("Lazy") | After N seconds idle, nudges the mouse 1px and/or taps the invisible `F15` key; blocks sleep and screen-off. |
+| **Work Mode** (default; "Cống hiến Mode" in Vietnamese) | Normal. App does nothing. |
+| **Nobita Mode** | After N seconds idle, nudges the mouse 1px and/or taps the invisible `F15` key; blocks sleep and screen-off. |
 
-> The app UI is in Vietnamese. Menu labels below are quoted as shown in the app, with an English translation.
+UI in English or Vietnamese: follows the Windows language by default, change it in Settings → General → Language.
 
 ## Install
 
@@ -15,6 +15,12 @@ PowerShell (no admin). Installs or updates to `%LOCALAPPDATA%\Programs\IAmNobita
 
 ```powershell
 irm https://raw.githubusercontent.com/vietbn82/iam-nobita/main/install.ps1 | iex
+```
+
+winget (pending review in [winget-pkgs](https://github.com/microsoft/winget-pkgs)):
+
+```powershell
+winget install vietbn82.IAmNobita
 ```
 
 Or download the exe directly. No install needed, run it from anywhere:
@@ -27,22 +33,26 @@ https://github.com/vietbn82/iam-nobita/releases/latest/download/IAmNobita.exe
 | Action | How |
 |---|---|
 | Toggle mode | `Ctrl+F12` (configurable) or double-click the tray icon |
-| Switch once, later | Tray → `Hẹn giờ đổi mode` (Mode timer): 15m / 30m / 1h / 2h / 4h / custom |
-| Weekly schedule | Tray → `Cài đặt…` (Settings) → `Lịch` (Schedule): time + target mode + weekdays, any number of rows |
-| History | Tray → `Lịch sử đổi mode…` (Mode history): every switch with time, new mode and source (hotkey / menu / timer / schedule / exit). Shows the last 30 days by default, any date range on demand. Stored in SQLite at `%APPDATA%\IAmNobita\history.db` |
-| Start with Windows | Tray → `Khởi động cùng Windows` (Start with Windows) |
-| Settings | Tray → `Cài đặt…` (Settings), saved to `%APPDATA%\IAmNobita\settings.json` |
-| Update | Checks GitHub Releases daily, or Tray → `Kiểm tra cập nhật` (Check for updates) |
-| Exit | Tray → `Nghỉ khỏe!` (Exit) |
+| Switch once, later | Tray → `Mode timer`: 15m / 30m / 1h / 2h / 4h / custom |
+| Weekly schedule | Tray → `Settings…` → `Schedule`: time + target mode + weekdays, any number of rows |
+| Days off | Settings → `Schedule` → days off list, or Tray → `Skip schedule today` |
+| History | Tray → `Mode history…`: mode switches plus app start/exit, lock/unlock, sleep/resume. Last 30 days by default, any date range on demand. SQLite at `%APPDATA%\IAmNobita\history.db`, kept 365 days (configurable, 0 = forever) |
+| Backup settings | Settings → `General` → `Export…` / `Import…` (JSON) |
+| Start with Windows | Tray → `Start with Windows` |
+| Update | Checks GitHub Releases daily, or Tray → `Check for updates` |
+| Exit | Tray → `Exit` |
 
-Settings tabs:
+Settings are saved to `%APPDATA%\IAmNobita\settings.json`.
 
-| Tab | Options |
-|---|---|
-| `Chung` (General) | Hotkey, confirm before toggling, start with Windows, keep-active method (mouse / F15 / both), idle seconds before acting |
-| `Toast` | On/off, duration, font size, bold, icon, theme (auto / light / dark), screen corner, opacity, preview |
-| `Lịch` (Schedule) | Weekly rules: at `HH:mm` on selected weekdays, switch to a mode |
-| `Cập nhật` (Update) | Current version, daily auto-check, check now |
+### Command line
+
+```powershell
+IAmNobita.exe --nobita   # switch to Nobita Mode
+IAmNobita.exe --work     # switch to Work Mode
+IAmNobita.exe --toggle   # switch to the other mode
+```
+
+If the app is already running, the command is sent to it; otherwise the app starts and applies it. Installed via winget, the command is `iamnobita`. Handy for scripts and Task Scheduler.
 
 ## Build
 
@@ -60,5 +70,11 @@ Output: `publish/IAmNobita.exe`, a single self-contained file that runs on any W
 Self-update looks for an `IAmNobita.exe` asset on the latest GitHub release. The tag (`vX.Y.Z`) must match `<Version>` in `src/IAmNobita.csproj`:
 
 ```sh
-gh release create v2.2.0 publish/IAmNobita.exe
+gh release create v2.3.0 publish/IAmNobita.exe
 ```
+
+Then copy `winget/manifests/...` to a new version folder, update `PackageVersion`, `InstallerUrl` and `InstallerSha256`, run `winget validate`, and open a PR to [microsoft/winget-pkgs](https://github.com/microsoft/winget-pkgs).
+
+## License
+
+[MIT](LICENSE)
