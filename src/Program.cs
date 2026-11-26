@@ -5,8 +5,9 @@ namespace IAmNobita;
 static class Program
 {
     [STAThread]
-    static void Main()
+    static void Main(string[] args)
     {
+        Updater.AfterUpdate(args); // before the mutex: old instance may still be exiting
         using var mutex = new Mutex(true, @"Local\IAmNobita", out bool firstInstance);
         if (!firstInstance) return;
         ApplicationConfiguration.Initialize();
@@ -18,7 +19,7 @@ static class Program
 sealed class TrayApp : ApplicationContext
 {
     const string Title = "I'm Nobita";
-    static readonly TimeSpan IdleBeforeJiggle = TimeSpan.FromSeconds(60);
+    static readonly TimeSpan UpdateCheckEvery = TimeSpan.FromHours(24);
     static readonly (string Text, TimeSpan Span)[] Presets =
     [
         ("15 phút", TimeSpan.FromMinutes(15)),
@@ -36,10 +37,12 @@ sealed class TrayApp : ApplicationContext
     readonly ToolStripMenuItem modeItem, timerMenu, startupItem;
     readonly System.Windows.Forms.Timer tick = new() { Interval = 1000 };
     Settings settings = Settings.Load();
-    bool nobita;              // false = "Cống hiến Mode" (default), true = "Nobita Mode" (jiggle)
-    long? switchAt;           // Environment.TickCount64 deadline of the mode timer
+    bool nobita;              // false = "Cống hiến Mode" (default), true = "Nobita Mode" (keep active)
+    long? switchAt;           // Environment.TickCount64 deadline of the one-shot mode timer
     ToolStripMenuItem? activeTimerItem;
-    bool dialogOpen;
+    DateTime lastTick = DateTime.Now;
+    long nextUpdateCheck = Environment.TickCount64 + 15_000;
+    bool dialogOpen, checkingUpdate;
 
     string ModeText => nobita ? "Nobita Mode" : "Cống hiến Mode";
     Icon ModeIcon => nobita ? AppIcon : WorkingIcon;
@@ -63,6 +66,7 @@ sealed class TrayApp : ApplicationContext
             timerMenu,
             startupItem,
             new ToolStripMenuItem("Cài đặt…", null, (_, _) => OpenSettings()),
+            new ToolStripMenuItem("Kiểm tra cập nhật", null, (_, _) => _ = CheckUpdate(manual: true)),
             new ToolStripSeparator(),
             new ToolStripMenuItem("Nghỉ khỏe!", null, (_, _) => ExitThread()),
         ]);
@@ -73,19 +77,19 @@ sealed class TrayApp : ApplicationContext
 
         hotkey = new HotkeyWindow(OnHotkey);
         if (!hotkey.Register(settings.HotkeyModifiers, settings.HotkeyKey))
-            Toast.Show(WorkingIcon, $"{settings.HotkeyText} bị app khác chiếm", settings.ToastSeconds + 2);
+            Toast.Show(WorkingIcon, $"{settings.HotkeyText} bị app khác chiếm", settings with { ShowToast = true, ToastSeconds = 4 });
 
         tick.Tick += (_, _) => OnTick();
         tick.Start();
         Refresh();
     }
 
-    void Toggle()
+    void Toggle(string? reason = null)
     {
         nobita = !nobita;
         Native.KeepAwake(nobita);
         Refresh();
-        Toast.Show(ModeIcon, ModeText, settings.ToastSeconds);
+        Toast.Show(ModeIcon, reason == null ? ModeText : $"{reason}: {ModeText}", settings);
     }
 
     void OnHotkey()
@@ -104,13 +108,64 @@ sealed class TrayApp : ApplicationContext
 
     void OnTick()
     {
+        var now = DateTime.Now;
+        var rule = Schedule.Due(settings.Schedules, lastTick, now);
+        lastTick = now;
+        if (rule != null && rule.Nobita != nobita)
+            Toggle(rule.Name.Length > 0 ? $"Lịch \"{rule.Name}\"" : "Lịch");
+
         if (switchAt is long due && Environment.TickCount64 >= due)
         {
             switchAt = null;
-            Toggle();
+            Toggle("Hẹn giờ");
         }
-        if (nobita && Native.IdleTime() >= IdleBeforeJiggle) Native.Jiggle();
+
+        if (nobita && Native.IdleTime() >= TimeSpan.FromSeconds(settings.IdleSeconds))
+            Native.KeepActive(settings.ActiveMethod);
+
+        if (settings.AutoCheckUpdate && Environment.TickCount64 >= nextUpdateCheck)
+        {
+            nextUpdateCheck = Environment.TickCount64 + (long)UpdateCheckEvery.TotalMilliseconds;
+            _ = CheckUpdate(manual: false);
+        }
+
         UpdateTooltip();
+    }
+
+    async Task CheckUpdate(bool manual)
+    {
+        if (checkingUpdate) return;
+        checkingUpdate = true;
+        try
+        {
+            var release = await Updater.GetLatestAsync();
+            if (release == null || release.Version <= Updater.Current)
+            {
+                if (manual)
+                    MessageBox.Show(release == null ? "Chưa có bản phát hành nào trên GitHub." : $"Đang dùng bản mới nhất (v{Updater.Current}).",
+                        Title, MessageBoxButtons.OK, MessageBoxIcon.Information, MessageBoxDefaultButton.Button1, MessageBoxOptions.DefaultDesktopOnly);
+                return;
+            }
+            if (!manual && dialogOpen) return; // don't stack dialogs; retried next day or via menu
+
+            Toast.Show(AppIcon, $"Có bản mới {release.Tag}", settings);
+            var answer = MessageBox.Show($"Có bản {release.Tag} (đang dùng v{Updater.Current}).\nCập nhật ngay?", Title,
+                MessageBoxButtons.YesNo, MessageBoxIcon.Question, MessageBoxDefaultButton.Button1, MessageBoxOptions.DefaultDesktopOnly);
+            if (answer != DialogResult.Yes) return;
+
+            await Updater.InstallAsync(release);
+            ExitThread();
+        }
+        catch (Exception e) // network, disk, permissions: never crash the tray app
+        {
+            if (manual && MessageBox.Show($"Không cập nhật được:\n{e.Message}\n\nMở trang phát hành để tải tay?", Title,
+                    MessageBoxButtons.YesNo, MessageBoxIcon.Warning, MessageBoxDefaultButton.Button1, MessageBoxOptions.DefaultDesktopOnly) == DialogResult.Yes)
+                Updater.OpenReleasesPage();
+        }
+        finally
+        {
+            checkingUpdate = false;
+        }
     }
 
     void StartTimer(TimeSpan span, ToolStripMenuItem item)
@@ -118,7 +173,7 @@ sealed class TrayApp : ApplicationContext
         switchAt = Environment.TickCount64 + (long)span.TotalMilliseconds;
         activeTimerItem = item;
         Refresh();
-        Toast.Show(ModeIcon, $"Đổi mode sau {Format(span)}", settings.ToastSeconds);
+        Toast.Show(ModeIcon, $"Đổi mode sau {Format(span)}", settings);
     }
 
     void CustomTimer(ToolStripMenuItem item)
@@ -140,7 +195,7 @@ sealed class TrayApp : ApplicationContext
         if (dialogOpen) return;
         dialogOpen = true;
         hotkey.Unregister(); // so the capture box can receive the current combo
-        using var form = new SettingsForm(settings, hotkey.Register);
+        using var form = new SettingsForm(settings, hotkey.Register, () => _ = CheckUpdate(manual: true));
         if (form.ShowDialog() == DialogResult.OK)
         {
             settings = form.Result; // hotkey already registered by the dialog's OK validation
@@ -152,11 +207,13 @@ sealed class TrayApp : ApplicationContext
             hotkey.Register(settings.HotkeyModifiers, settings.HotkeyKey);
         }
         dialogOpen = false;
+        Refresh();
     }
 
     void Refresh()
     {
         modeItem.Text = ModeText;
+        modeItem.ShortcutKeyDisplayString = settings.HotkeyKey == Keys.None ? null : settings.HotkeyText;
         tray.Icon = ModeIcon;
         foreach (var item in timerMenu.DropDownItems.OfType<ToolStripMenuItem>())
             item.Checked = switchAt != null && item == activeTimerItem;
@@ -251,12 +308,21 @@ static class Native
     [StructLayout(LayoutKind.Sequential)]
     struct LASTINPUTINFO { public uint cbSize, dwTime; }
 
-    // MOUSEINPUT is the largest union member, so this matches sizeof(INPUT) on x86 and x64.
     [StructLayout(LayoutKind.Sequential)]
-    struct INPUT { public uint type; public MOUSEINPUT mi; }
+    struct INPUT { public uint type; public InputUnion u; }
+
+    [StructLayout(LayoutKind.Explicit)]
+    struct InputUnion
+    {
+        [FieldOffset(0)] public MOUSEINPUT mi;
+        [FieldOffset(0)] public KEYBDINPUT ki;
+    }
 
     [StructLayout(LayoutKind.Sequential)]
     struct MOUSEINPUT { public int dx, dy; public uint mouseData, dwFlags, time; public IntPtr dwExtraInfo; }
+
+    [StructLayout(LayoutKind.Sequential)]
+    struct KEYBDINPUT { public ushort wVk, wScan; public uint dwFlags, time; public IntPtr dwExtraInfo; }
 
     public static bool IsWinKeyDown() => (GetKeyState(0x5B) | GetKeyState(0x5C)) < 0; // VK_LWIN | VK_RWIN
 
@@ -268,16 +334,25 @@ static class Native
             : TimeSpan.Zero;
     }
 
-    /// <summary>Move cursor 1px right then back — resets the system idle timer, net zero movement.</summary>
-    public static void Jiggle()
+    /// <summary>
+    /// Resets the system idle timer. Mouse: 1px right then back (net zero). F15: key absent on real keyboards, types nothing.
+    /// </summary>
+    public static void KeepActive(ActiveMethod method)
     {
-        const uint INPUT_MOUSE = 0, MOUSEEVENTF_MOVE = 1;
-        INPUT[] inputs =
-        [
-            new() { type = INPUT_MOUSE, mi = new() { dx = 1, dwFlags = MOUSEEVENTF_MOVE } },
-            new() { type = INPUT_MOUSE, mi = new() { dx = -1, dwFlags = MOUSEEVENTF_MOVE } },
-        ];
-        SendInput((uint)inputs.Length, inputs, Marshal.SizeOf<INPUT>());
+        const uint INPUT_MOUSE = 0, INPUT_KEYBOARD = 1, MOUSEEVENTF_MOVE = 1, KEYEVENTF_KEYUP = 2;
+        const ushort VK_F15 = 0x7E;
+        var inputs = new List<INPUT>();
+        if (method != ActiveMethod.F15)
+        {
+            inputs.Add(new() { type = INPUT_MOUSE, u = new() { mi = new() { dx = 1, dwFlags = MOUSEEVENTF_MOVE } } });
+            inputs.Add(new() { type = INPUT_MOUSE, u = new() { mi = new() { dx = -1, dwFlags = MOUSEEVENTF_MOVE } } });
+        }
+        if (method != ActiveMethod.Mouse)
+        {
+            inputs.Add(new() { type = INPUT_KEYBOARD, u = new() { ki = new() { wVk = VK_F15 } } });
+            inputs.Add(new() { type = INPUT_KEYBOARD, u = new() { ki = new() { wVk = VK_F15, dwFlags = KEYEVENTF_KEYUP } } });
+        }
+        SendInput((uint)inputs.Count, [.. inputs], Marshal.SizeOf<INPUT>());
     }
 
     /// <summary>Block sleep + screen-off while on; restore normal power behaviour when off.</summary>

@@ -3,5 +3,7 @@
 !/src/
 !/.gitignore
 !/README.md
+!/tests/
+!/install.ps1
 bin/
 obj/
